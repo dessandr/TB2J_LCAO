@@ -21,10 +21,11 @@ from .stru_api import read_abacus
 
 class AbacusWrapper(AbstractTB):
     def __init__(
-        self, HR, SR, Rlist, nbasis, nspin=1, HR_soc=None, HR_nosoc=None, nel=None
+        self, HR, SR, Rlist, nbasis, nspin=1, HR_soc=None, HR_nosoc=None, nel=None, orth=False
     ):
         self.R2kfactor = 2j * np.pi
-        self.is_orthogonal = False
+        self.is_orthogonal = orth
+        self.orth = orth
         self.split_soc = False
         self._name = "ABACUS"
         self._HR = HR
@@ -110,9 +111,23 @@ class AbacusWrapper(AbstractTB):
         elif convention == 1:
             # TODO: implement the first convention (the r convention)
             raise NotImplementedError("convention 1 is not implemented yet.")
-            pass
         else:
             raise ValueError("convention should be either 1 or 2.")
+            
+        if self.orth:
+            from scipy.linalg import fractional_matrix_power
+            # Check if S is strictly positive definite for fractional power
+            try:
+                S_inv_sqrt = fractional_matrix_power(Sk, -0.5)
+                # Ensure it remains hermitian (avoid small imaginary numerical errors)
+                S_inv_sqrt = (S_inv_sqrt + S_inv_sqrt.conj().T) / 2.0
+                Hk = S_inv_sqrt @ Hk @ S_inv_sqrt
+                Hk = (Hk + Hk.conj().T) / 2.0
+                Sk = np.eye(self.nbasis, dtype=complex)
+            except np.linalg.LinAlgError:
+                # Fallback to direct inverse if fractional_matrix_power fails or is ill-conditioned
+                pass
+
         return Hk, Sk
 
     def solve(self, k, convention=2):
@@ -216,11 +231,11 @@ class AbacusParser:
         )
         return nbasis, Rlist, HR, SR
 
-    def get_models(self):
+    def get_models(self, orth=False):
         if self.spin == "collinear":
             nbasis, Rlist, HR_up, HR_dn, SR = self.read_HSR_collinear()
-            model_up = AbacusWrapper(HR_up, SR, Rlist, nbasis, nspin=1)
-            model_dn = AbacusWrapper(HR_dn, SR, Rlist, nbasis, nspin=1)
+            model_up = AbacusWrapper(HR_up, SR, Rlist, nbasis, nspin=1, orth=orth)
+            model_dn = AbacusWrapper(HR_dn, SR, Rlist, nbasis, nspin=1, orth=orth)
             model_up.efermi = self.efermi
             model_dn.efermi = self.efermi
             model_up.basis, model_dn.basis = self.get_basis()
@@ -229,7 +244,7 @@ class AbacusParser:
             return model_up, model_dn
         elif self.spin == "noncollinear":
             nbasis, Rlist, HR, SR = self.Read_HSR_noncollinear()
-            model = AbacusWrapper(HR, SR, Rlist, nbasis, nspin=2)
+            model = AbacusWrapper(HR, SR, Rlist, nbasis, nspin=2, orth=orth)
             model.efermi = self.efermi
             model.basis = self.get_basis()
             model.atoms = self.atoms
@@ -297,7 +312,7 @@ class AbacusSplitSOCParser:
         if spin1 != "noncollinear" or spin2 != "noncollinear":
             raise ValueError("Spin should be noncollinear")
 
-    def parse(self):
+    def parse(self, orth=False):
         nbasis, Rlist, HR_nosoc, SR = self.parser_nosoc.Read_HSR_noncollinear()
         nbasis2, Rlist2, HR2, SR2 = self.parser_soc.Read_HSR_noncollinear()
         # print(HR[0])
@@ -311,6 +326,7 @@ class AbacusSplitSOCParser:
             HR_soc=HR_soc,
             HR_nosoc=HR_nosoc,
             nel=self.parser_nosoc.nel,
+            orth=orth,
         )
         model.efermi = self.parser_soc.efermi
         model.basis = self.parser_nosoc.basis

@@ -32,6 +32,7 @@ def gen_exchange_abacus(
     orb_decomposition=False,
     index_magnetic_atoms=None,
     description=None,
+    orth=False,
 ):
     outpath = Path(path) / f"OUT.{suffix}"
 
@@ -42,7 +43,7 @@ def gen_exchange_abacus(
     parser = AbacusParser(outpath=outpath, spin=None, binary=binary)
     spin = parser.read_spin()
     if spin == "collinear":
-        tbmodel_up, tbmodel_dn = parser.get_models()
+        tbmodel_up, tbmodel_dn = parser.get_models(orth=orth)
         efermi = parser.read_efermi()
         print("Starting to calculate exchange.")
         description = f""" Input from collinear Abacus data.
@@ -67,12 +68,13 @@ data directory: {outpath}
             orb_decomposition=orb_decomposition,
             index_magnetic_atoms=index_magnetic_atoms,
             description=description,
+            orth=orth,
         )
         exchange.run(path=output_path)
         print("\n")
         print(f"All calculation finished. The results are in {output_path} directory.")
     else:
-        tbmodel = parser.get_models()
+        tbmodel = parser.get_models(orth=orth)
         print("Starting to calculate exchange.")
         description = f""" Input from non-collinear Abacus data.
 data directory: {outpath}
@@ -95,6 +97,7 @@ data directory: {outpath}
             orb_decomposition=orb_decomposition,
             index_magnetic_atoms=index_magnetic_atoms,
             description=description,
+            orth=orth,
         )
         exchange.run(path=output_path)
         print("\n")

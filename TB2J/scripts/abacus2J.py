@@ -54,6 +54,7 @@ def run_abacus2J():
         exclude_orbs=args.exclude_orbs,
         orb_decomposition=args.orb_decomposition,
         index_magnetic_atoms=index_magnetic_atoms,
+        orth=args.orth,
     )
 
 
